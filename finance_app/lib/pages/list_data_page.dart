@@ -5,7 +5,7 @@ import '../database/app_database.dart';
 import '../models/finance_item_model.dart';
 import '../providers/main_currency_provider.dart';
 import '../widgets/edit_item_dialog.dart';
-import '../main.dart'; // for MainCurrencyProvider
+import '../widgets/outline_text.dart';
 
 class FinanceListPage extends StatefulWidget {
   const FinanceListPage({super.key});
@@ -74,6 +74,7 @@ class _FinanceListPageState extends State<FinanceListPage> {
   Widget build(BuildContext context) {
     final mainCurrency = Provider.of<MainCurrencyProvider>(context).currency;
     final grouped = _groupByMonthDay(_items);
+    final primaryColor = Theme.of(context).colorScheme.secondary;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Finance Records')),
@@ -97,14 +98,15 @@ class _FinanceListPageState extends State<FinanceListPage> {
             Container(
               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
               color: Colors.grey[300],
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(monthName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('Income: ${_formatAmount(monthIncome)} $mainCurrency'),
-                      const SizedBox(width: 12),
                       Text('Expense: ${_formatAmount(monthExpense)} $mainCurrency'),
                     ],
                   ),
@@ -125,14 +127,15 @@ class _FinanceListPageState extends State<FinanceListPage> {
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
                   color: Colors.grey[200],
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(dayDate, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text('Income: ${_formatAmount(dayIncome)} $mainCurrency'),
-                          const SizedBox(width: 12),
                           Text('Expense: ${_formatAmount(dayExpense)} $mainCurrency'),
                         ],
                       ),
@@ -143,37 +146,43 @@ class _FinanceListPageState extends State<FinanceListPage> {
                 ...dayItems.map((item) => GestureDetector(
                   onTap: () => _editItem(item),
                   child: Card(
+                    color: primaryColor,
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     child: Padding(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(15),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(DateFormat('HH:mm').format(item.timestamp)),
-                              Flexible(
-                                child: Text(item.category,
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(DateFormat('HH:mm:ss').format(item.timestamp)),
+                                  OutlinedText(
+                                    text: item.flow,
+                                    size: 18,
+                                    strokeWidth: 3,
+                                    outlineColor: Colors.black,
+                                    fillColor: item.flow == 'Income' ? Colors.green : Colors.red,
+                                  ),
+                                  Text(
+                                    '${_formatAmount(item.amount)} ${item.currency}',
                                     style: const TextStyle(fontWeight: FontWeight.bold),
-                                    overflow: TextOverflow.ellipsis),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
+
+                              const SizedBox(height: 6),
+
                               Text(
-                                item.flow,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: item.flow == 'Income' ? Colors.green : Colors.red,
-                                ),
+                                item.category,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                softWrap: true,
+                                maxLines: null,  // unlimited lines
                               ),
-                              Text('${_formatAmount(item.amount)} ${item.currency}',
-                                  style: const TextStyle(fontWeight: FontWeight.bold)),
                             ],
                           ),
                         ],
