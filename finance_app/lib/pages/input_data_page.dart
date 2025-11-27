@@ -16,9 +16,10 @@ class _InputDataPageState extends State<InputDataPage> {
 
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _categoryController = TextEditingController();
+  final FocusNode _categoryFocusNode = FocusNode();
 
-  String _currency = 'RSD';
-  String _flow = 'Expense';
+  String? _currency;
+  String? _flow;
   bool _isSaving = false;
   bool _formValid = false;
 
@@ -34,6 +35,7 @@ class _InputDataPageState extends State<InputDataPage> {
   void dispose() {
     _amountController.dispose();
     _categoryController.dispose();
+    _categoryFocusNode.dispose();
     super.dispose();
   }
 
@@ -44,9 +46,12 @@ class _InputDataPageState extends State<InputDataPage> {
     });
   }
 
+  // FIXED regex
   void _validateForm() {
-    final amountText = _amountController.text.replaceAll(r'[, ]', '');
+    final amountText = _amountController.text.replaceAll(RegExp(r'[,\s]'), '');
     final categoryText = _categoryController.text.trim();
+
+    final currencyValid = _currency != null;
 
     bool amountValid = false;
     if (amountText.isNotEmpty) {
@@ -54,14 +59,17 @@ class _InputDataPageState extends State<InputDataPage> {
       if (parsed != null && parsed > 0) amountValid = true;
     }
 
+    final flowValid = _flow != null;
     final categoryValid = categoryText.isNotEmpty;
 
-    final newValid = amountValid && categoryValid;
-    if (newValid != _formValid) setState(() => _formValid = newValid);
+    final newValid = amountValid && categoryValid && currencyValid && flowValid;
+    if (newValid != _formValid) {
+      setState(() => _formValid = newValid);
+    }
   }
 
   double? _parseAmount() {
-    final cleaned = _amountController.text.replaceAll(RegExp(r'[, ]'), '');
+    final cleaned = _amountController.text.replaceAll(RegExp(r'[,\s]'), '');
     if (cleaned.isEmpty) return null;
     return double.tryParse(cleaned);
   }
@@ -81,9 +89,9 @@ class _InputDataPageState extends State<InputDataPage> {
     setState(() => _isSaving = true);
 
     final item = FinanceItemModel(
-      currency: _currency,
+      currency: _currency!,
       amount: parsedAmount,
-      flow: _flow,
+      flow: _flow!,
       category: categoryText,
       timestamp: DateTime.now(),
     );
@@ -111,7 +119,7 @@ class _InputDataPageState extends State<InputDataPage> {
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.secondary;
-    final onPrimary = Theme.of(context).colorScheme.onPrimary;
+    final onPrimary = Theme.of(context).colorScheme.onSecondary;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Input Finance Data')),
@@ -136,10 +144,13 @@ class _InputDataPageState extends State<InputDataPage> {
                       ),
                       DropdownButton<String>(
                         value: _currency,
+                        hint: Text('Select', style: TextStyle(color: onPrimary, fontSize: 20)),
                         dropdownColor: primaryColor,
+                        underline: const SizedBox(),
                         style: TextStyle(fontSize: 20, color: onPrimary),
                         onChanged: (v) {
-                          if (v != null) setState(() => _currency = v);
+                          setState(() => _currency = v);
+                          _validateForm();
                         },
                         items: ['RSD', 'EUR', 'USD', 'GBP']
                             .map((c) => DropdownMenuItem(value: c, child: Text(c)))
@@ -152,7 +163,7 @@ class _InputDataPageState extends State<InputDataPage> {
 
               const SizedBox(height: 10),
 
-              // Amount card
+              // Amount
               Card(
                 color: primaryColor,
                 elevation: 2,
@@ -161,8 +172,8 @@ class _InputDataPageState extends State<InputDataPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Row(
                     children: [
-                      const Expanded(
-                          child: Text('Amount', style: TextStyle(fontSize: 20, color: Colors.white))),
+                      Expanded(
+                          child: Text('Amount', style: TextStyle(fontSize: 20, color: onPrimary))),
                       SizedBox(
                         width: 160,
                         child: TextFormField(
@@ -174,7 +185,7 @@ class _InputDataPageState extends State<InputDataPage> {
                           style: const TextStyle(fontSize: 20, color: Colors.black),
                           decoration: InputDecoration(
                             filled: true,
-                            fillColor: onPrimary,
+                            fillColor: Colors.white,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                             hintText: '0',
                             isDense: true,
@@ -207,10 +218,13 @@ class _InputDataPageState extends State<InputDataPage> {
                       Expanded(child: Text('Flow', style: TextStyle(fontSize: 20, color: onPrimary))),
                       DropdownButton<String>(
                         value: _flow,
+                        hint: Text('Select', style: TextStyle(color: onPrimary, fontSize: 20)),
+                        underline: const SizedBox(),
                         dropdownColor: primaryColor,
                         style: TextStyle(fontSize: 20, color: onPrimary),
                         onChanged: (v) {
-                          if (v != null) setState(() => _flow = v);
+                          setState(() => _flow = v);
+                          _validateForm();
                         },
                         items: ['Expense', 'Income']
                             .map((f) => DropdownMenuItem(value: f, child: Text(f)))
@@ -223,7 +237,7 @@ class _InputDataPageState extends State<InputDataPage> {
 
               const SizedBox(height: 10),
 
-              // Category
+              // Category + autocomplete
               Card(
                 color: primaryColor,
                 elevation: 2,
@@ -232,16 +246,17 @@ class _InputDataPageState extends State<InputDataPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Row(
                     children: [
-                      const Expanded(child: Text('Category', style: TextStyle(fontSize: 20, color: Colors.white))),
+                      Expanded(
+                        child: Text('Category', style: TextStyle(fontSize: 20, color: onPrimary)),
+                      ),
                       SizedBox(
                         width: 200,
                         child: RawAutocomplete<String>(
                           textEditingController: _categoryController,
-                          focusNode: FocusNode(),
-                          optionsBuilder: (TextEditingValue textEditingValue) {
-                            // Show all categories if field focused and empty
-                            if (textEditingValue.text.isEmpty) return _categories;
-                            final q = textEditingValue.text.toLowerCase();
+                          focusNode: _categoryFocusNode,
+                          optionsBuilder: (TextEditingValue textValue) {
+                            if (textValue.text.isEmpty) return _categories;
+                            final q = textValue.text.toLowerCase();
                             return _categories.where((c) => c.toLowerCase().contains(q));
                           },
                           fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
@@ -250,19 +265,23 @@ class _InputDataPageState extends State<InputDataPage> {
                               focusNode: focusNode,
                               decoration: InputDecoration(
                                 filled: true,
-                                fillColor: onPrimary,
+                                fillColor: Colors.white,
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                                 hintText: 'e.g. Food',
                                 isDense: true,
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                               ),
                               validator: (value) {
-                                if (value == null || value.trim().isEmpty) return 'Category cannot be empty';
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Category cannot be empty';
+                                }
                                 return null;
                               },
                             );
                           },
                           optionsViewBuilder: (context, onSelected, options) {
+                            final list = options.toList();
+
                             return Align(
                               alignment: Alignment.topRight,
                               child: Material(
@@ -272,13 +291,13 @@ class _InputDataPageState extends State<InputDataPage> {
                                   child: ListView.builder(
                                     padding: EdgeInsets.zero,
                                     shrinkWrap: true,
-                                    itemCount: options.length,
+                                    itemCount: list.length,
                                     itemBuilder: (context, index) {
-                                      final option = options.elementAt(index);
+                                      final opt = list[index];
                                       return ListTile(
-                                        title: Text(option),
+                                        title: Text(opt),
                                         dense: true,
-                                        onTap: () => onSelected(option),
+                                        onTap: () => onSelected(opt),
                                       );
                                     },
                                   ),
@@ -299,7 +318,7 @@ class _InputDataPageState extends State<InputDataPage> {
 
               const Spacer(),
 
-              // Input button
+              // Submit button
               SizedBox(
                 width: double.infinity,
                 height: 52,
