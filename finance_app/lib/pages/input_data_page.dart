@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../constants/currencies.dart';
 import '../database/app_database.dart';
 import '../models/finance_item_model.dart';
 
@@ -152,7 +153,7 @@ class _InputDataPageState extends State<InputDataPage> {
                           setState(() => _currency = v);
                           _validateForm();
                         },
-                        items: ['RSD', 'EUR', 'USD', 'GBP']
+                        items: Currencies.all
                             .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                             .toList(),
                       ),

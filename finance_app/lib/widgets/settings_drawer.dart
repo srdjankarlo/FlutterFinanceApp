@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../constants/currencies.dart';
 import '../providers/main_currency_provider.dart';
 import '../theme/color_schemes.dart';
 import '../main.dart'; // for ThemeProvider
@@ -65,7 +66,7 @@ class SettingsDrawer extends StatelessWidget {
           title: const Text('Select Default Currency'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
-            children: ['RSD', 'USD', 'EUR', 'GBP'].map((c) {
+            children: Currencies.all.map((c) {
               final isSelected = provider.currency == c;
               return ListTile(
                 title: Text(c),
