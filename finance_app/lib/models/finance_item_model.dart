@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 class FinanceItemModel {
   final int? id;
   final String currency;
@@ -15,6 +17,10 @@ class FinanceItemModel {
     required this.timestamp,
   });
 
+  // --- Helpers ---
+  String get timeFormatted => DateFormat('HH:mm').format(timestamp);
+  String get dateFormatted => DateFormat('dd.MM.yyyy').format(timestamp);
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -30,7 +36,7 @@ class FinanceItemModel {
     return FinanceItemModel(
       id: map['id'],
       currency: map['currency'],
-      amount: map['amount'],
+      amount: (map['amount'] as num).toDouble(),
       flow: map['flow'],
       category: map['category'],
       timestamp: DateTime.parse(map['timestamp']),

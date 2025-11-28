@@ -1,5 +1,6 @@
 import 'package:finance_app/pages/input_data_page.dart';
 import 'package:finance_app/pages/list_data_page.dart';
+import 'package:finance_app/pages/rates_page.dart';
 import 'package:flutter/material.dart';
 import '../widgets/settings_drawer.dart';
 
@@ -9,7 +10,8 @@ class StartingPage extends StatelessWidget {
   final List<String> menuItems = const [
     'Input',
     'Data List View',
-    'Statistics'
+    'Statistics',
+    'Rates'
   ];
 
   @override
@@ -60,6 +62,14 @@ class StartingPage extends StatelessWidget {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('$item page not implemented yet')),
                     );
+                  } else if (item == 'Rates') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const RatesPage()),
+                    );
+                    // ScaffoldMessenger.of(context).showSnackBar(
+                    //   SnackBar(content: Text('$item page not implemented yet')),
+                    // );
                   }
                   else {
                     // Placeholder for other pages

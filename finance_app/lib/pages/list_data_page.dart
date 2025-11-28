@@ -4,8 +4,16 @@ import 'package:provider/provider.dart';
 import '../database/app_database.dart';
 import '../models/finance_item_model.dart';
 import '../providers/main_currency_provider.dart';
+import '../services/currency_conversion_service.dart';
 import '../widgets/edit_item_dialog.dart';
 import '../widgets/outline_text.dart';
+
+class ConvertedTotals {
+  double income;
+  double expense;
+
+  ConvertedTotals({this.income = 0, this.expense = 0});
+}
 
 class FinanceListPage extends StatefulWidget {
   const FinanceListPage({super.key});
@@ -17,6 +25,7 @@ class FinanceListPage extends StatefulWidget {
 class _FinanceListPageState extends State<FinanceListPage> {
   List<FinanceItemModel> _items = [];
   bool _loading = true;
+  Map<String, Map<String, ConvertedTotals>> _totals = {};
 
   @override
   void initState() {
@@ -25,18 +34,49 @@ class _FinanceListPageState extends State<FinanceListPage> {
   }
 
   Future<void> _loadItems() async {
-    final items = await AppDatabase.instance.getAllItems();
+    setState(() => _loading = true);
 
-    // Sort newest first
+    final items = await AppDatabase.instance.getAllItems();
     items.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    final mainCurrency =
+        Provider.of<MainCurrencyProvider>(context, listen: false).currency;
+
+    final totals = <String, Map<String, ConvertedTotals>>{};
+    final service = CurrencyConversionService.instance;
+
+    // Pre-fetch all conversions asynchronously
+    final convertedValues = <FinanceItemModel, double>{};
+    for (var item in items) {
+      final converted =
+      await service.convert(amount: item.amount, from: item.currency, to: mainCurrency);
+      convertedValues[item] = converted ?? 0;
+    }
+
+    // Compute totals in a single pass
+    for (var item in items) {
+      final monthKey = DateFormat('yyyy-MM').format(item.timestamp);
+      final dayKey = DateFormat('yyyy-MM-dd').format(item.timestamp);
+
+      totals.putIfAbsent(monthKey, () => {});
+      totals[monthKey]!.putIfAbsent(dayKey, () => ConvertedTotals());
+
+      final conv = convertedValues[item] ?? 0;
+
+      if (item.flow == 'Income') {
+        totals[monthKey]![dayKey]!.income += conv;
+      } else {
+        totals[monthKey]![dayKey]!.expense += conv;
+      }
+    }
 
     setState(() {
       _items = items;
+      _totals = totals;
       _loading = false;
     });
   }
 
-  // Group items by month -> day
   Map<String, Map<String, List<FinanceItemModel>>> _groupByMonthDay(List<FinanceItemModel> items) {
     final map = <String, Map<String, List<FinanceItemModel>>>{};
     for (var item in items) {
@@ -47,11 +87,6 @@ class _FinanceListPageState extends State<FinanceListPage> {
       map[monthKey]![dayKey]!.add(item);
     }
     return map;
-  }
-
-  // Sum amounts for a given flow and currency
-  double _sumFlow(List<FinanceItemModel> items, String flow, String currency) {
-    return items.where((i) => i.flow == flow && i.currency == currency).fold(0.0, (prev, i) => prev + i.amount);
   }
 
   String _formatAmount(double amount) {
@@ -84,17 +119,19 @@ class _FinanceListPageState extends State<FinanceListPage> {
         padding: const EdgeInsets.all(12),
         children: grouped.entries.expand((monthEntry) {
           final monthKey = monthEntry.key;
-          final monthName = DateFormat('MMMM yyyy').format(DateTime.parse('$monthKey-01'));
+          final monthName = DateFormat('MMMM yyyy')
+              .format(DateTime.parse('$monthKey-01'));
           final monthDays = monthEntry.value.entries.toList()
             ..sort((a, b) => b.key.compareTo(a.key)); // newest day first
 
-          // Month totals
-          final allMonthItems = monthDays.expand((e) => e.value).toList();
-          final monthIncome = _sumFlow(allMonthItems, 'Income', mainCurrency);
-          final monthExpense = _sumFlow(allMonthItems, 'Expense', mainCurrency);
+          final monthIncome = _totals[monthKey]!.values
+              .fold(0.0, (sum, t) => sum + t.income);
+          final monthExpense = _totals[monthKey]!.values
+              .fold(0.0, (sum, t) => sum + t.expense);
 
           return [
             // Month header
+            // Month header with Balance
             Container(
               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
               color: Colors.grey[300],
@@ -103,6 +140,16 @@ class _FinanceListPageState extends State<FinanceListPage> {
                 children: [
                   Text(monthName, style: const TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
+                  // Balance row
+                  Text(
+                    'Balance: ${_formatAmount(monthIncome - monthExpense)} $mainCurrency',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: (monthIncome - monthExpense) >= 0 ? Colors.green : Colors.red,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  // Income and Expense row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -116,11 +163,12 @@ class _FinanceListPageState extends State<FinanceListPage> {
             // Days
             ...monthDays.expand((dayEntry) {
               final dayKey = dayEntry.key;
-              final dayDate = DateFormat('EEE, dd MMM yyyy').format(DateTime.parse(dayKey));
+              final dayDate = DateFormat('EEE, dd MMM yyyy')
+                  .format(DateTime.parse(dayKey));
               final dayItems = dayEntry.value;
 
-              final dayIncome = _sumFlow(dayItems, 'Income', mainCurrency);
-              final dayExpense = _sumFlow(dayItems, 'Expense', mainCurrency);
+              final dayIncome = _totals[monthKey]![dayKey]!.income;
+              final dayExpense = _totals[monthKey]![dayKey]!.expense;
 
               return [
                 // Day header
@@ -131,7 +179,17 @@ class _FinanceListPageState extends State<FinanceListPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(dayDate, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
+                      // Daily Balance
+                      Text(
+                        'Balance: ${_formatAmount(dayIncome - dayExpense)} $mainCurrency',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: (dayIncome - dayExpense) >= 0 ? Colors.green : Colors.red,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      // Income and Expense
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -148,42 +206,42 @@ class _FinanceListPageState extends State<FinanceListPage> {
                   child: Card(
                     color: primaryColor,
                     margin: const EdgeInsets.symmetric(vertical: 4),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     child: Padding(
                       padding: const EdgeInsets.all(15),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          Row(
+                            mainAxisAlignment:
+                            MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(DateFormat('HH:mm:ss').format(item.timestamp)),
-                                  OutlinedText(
-                                    text: item.flow,
-                                    size: 18,
-                                    strokeWidth: 3,
-                                    outlineColor: Colors.black,
-                                    fillColor: item.flow == 'Income' ? Colors.green : Colors.red,
-                                  ),
-                                  Text(
-                                    '${_formatAmount(item.amount)} ${item.currency}',
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                ],
+                              Text(DateFormat('HH:mm:ss')
+                                  .format(item.timestamp)),
+                              OutlinedText(
+                                text: item.flow,
+                                size: 18,
+                                strokeWidth: 3,
+                                outlineColor: Colors.black,
+                                fillColor: item.flow == 'Income'
+                                    ? Colors.green
+                                    : Colors.red,
                               ),
-
-                              const SizedBox(height: 6),
-
                               Text(
-                                item.category,
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                                softWrap: true,
-                                maxLines: null,  // unlimited lines
+                                '${_formatAmount(item.amount)} ${item.currency}',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            item.category,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold),
+                            softWrap: true,
+                            maxLines: null,
                           ),
                         ],
                       ),
