@@ -1,16 +1,19 @@
 import 'package:finance_app/pages/input_data_page.dart';
 import 'package:finance_app/pages/list_data_page.dart';
 import 'package:finance_app/pages/rates_page.dart';
+import 'package:finance_app/pages/statistics_page.dart';
 import 'package:flutter/material.dart';
 import '../widgets/settings_drawer.dart';
+import 'categories_page.dart';
 
 class StartingPage extends StatelessWidget {
   const StartingPage({super.key});
 
   final List<String> menuItems = const [
     'Input',
-    'Data List View',
+    'List Inputs',
     'Statistics',
+    'Categories',
     'Rates'
   ];
 
@@ -46,7 +49,7 @@ class StartingPage extends StatelessWidget {
                     // ScaffoldMessenger.of(context).showSnackBar(
                     //   SnackBar(content: Text('$item page not implemented yet')),
                     // );
-                  } else if (item == 'Data List View') {
+                  } else if (item == 'List Inputs') {
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => const FinanceListPage()),
@@ -55,13 +58,21 @@ class StartingPage extends StatelessWidget {
                     //   SnackBar(content: Text('$item page not implemented yet')),
                     // );
                   } else if (item == 'Statistics') {
-                    // Navigator.push(
-                    //   context,
-                    //   MaterialPageRoute(builder: (context) => const PersonalRecordsPage()),
-                    // );
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('$item page not implemented yet')),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const StatisticsPage()),
                     );
+                    // ScaffoldMessenger.of(context).showSnackBar(
+                    //   SnackBar(content: Text('$item page not implemented yet')),
+                    // );
+                  } else if (item == 'Categories') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const CategoriesPage()),
+                    );
+                    // ScaffoldMessenger.of(context).showSnackBar(
+                    //   SnackBar(content: Text('$item page not implemented yet')),
+                    // );
                   } else if (item == 'Rates') {
                     Navigator.push(
                       context,

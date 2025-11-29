@@ -51,11 +51,12 @@ class AppDatabase {
     // Keep base column (we'll always store rows with base='EUR')
     await db.execute('''
       CREATE TABLE exchange_rates (
-        base TEXT NOT NULL,
-        target TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        main_currency TEXT NOT NULL,
+        target_currency TEXT NOT NULL,
         rate REAL NOT NULL,
         timestamp TEXT NOT NULL,
-        PRIMARY KEY (base, target)
+        UNIQUE(main_currency, target_currency)
       );
     ''');
   }
@@ -98,6 +99,27 @@ class AppDatabase {
       'categories',
       {'name': name},
       conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  Future<void> deleteCategory(String name) async {
+    final db = await database;
+
+    await db.delete(
+      'categories',
+      where: 'name = ?',
+      whereArgs: [name],
+    );
+  }
+
+  Future<void> updateCategory(String oldName, String newName) async {
+    final db = await database;
+
+    await db.update(
+      'categories',
+      {'name': newName},
+      where: 'name = ?',
+      whereArgs: [oldName],
     );
   }
 
@@ -174,6 +196,23 @@ class AppDatabase {
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+  }
+
+  Future<List<FinanceItemModel>> getItemsBetween(DateTime start, DateTime end) async {
+    final db = await database;
+
+    // convert to ISO strings (same format you store in the DB)
+    final startIso = start.toIso8601String();
+    final endIso = end.toIso8601String();
+
+    final result = await db.query(
+      'finance_item',
+      where: 'timestamp >= ? AND timestamp < ?',
+      whereArgs: [startIso, endIso],
+      orderBy: 'timestamp ASC',
+    );
+
+    return result.map((row) => FinanceItemModel.fromMap(row)).toList();
   }
 
   Future<void> close() async {
