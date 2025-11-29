@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
-
+import 'package:collection/collection.dart'; // for mapIndexed
 import '../database/app_database.dart';
 import '../models/finance_item_model.dart';
 import '../providers/main_currency_provider.dart';
@@ -96,7 +96,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
     return remaining / daysInMonth;
   }
 
-  Widget _buildPie(Map<String, double> data, String title) {
+  Widget _buildHorizontalBarChart(Map<String, double> data, String title) {
     if (data.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(20),
@@ -105,44 +105,91 @@ class _StatisticsPageState extends State<StatisticsPage> {
     }
 
     final total = data.values.fold(0.0, (a, b) => a + b);
-
-    final sections = data.entries.map((e) {
-      final percent = (e.value / total * 100).toStringAsFixed(1);
-      final idx = data.keys.toList().indexOf(e.key);
-
-      return PieChartSectionData(
-        value: e.value,
-        title: "$percent%",
-        radius: 55,
-        color: Colors.primaries[idx % Colors.primaries.length],
-        titleStyle: const TextStyle(color: Colors.white, fontSize: 14),
-      );
-    }).toList();
+    final maxValue = data.values.reduce((a, b) => a > b ? a : b);
+    final entries = data.entries.toList();
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        const SizedBox(height: 10),
-        SizedBox(height: 200, child: PieChart(PieChartData(sections: sections))),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 12,
-          children: data.keys.map((cat) {
-            final idx = data.keys.toList().indexOf(cat);
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 14,
-                  height: 14,
-                  color: Colors.primaries[idx % Colors.primaries.length],
-                ),
-                const SizedBox(width: 5),
-                Text(cat),
-              ],
+        Text(
+          title,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+
+        // AUTO SIZED SCROLLABLE LIST OF HORIZONTAL BARS
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: entries.length,
+          itemBuilder: (context, i) {
+            final cat = entries[i].key;
+            final val = entries[i].value;
+            final percent = (val / total) * 100;
+            final barWidthFactor = val / maxValue;
+
+            final color = Colors.primaries[i % Colors.primaries.length];
+
+            // Text visibility inside bar
+            final labelInside = barWidthFactor > 0.25;
+            final labelColor = labelInside ? Colors.white : Colors.black;
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  // CATEGORY NAME
+                  SizedBox(
+                    width: 100,
+                    child: Text(
+                      cat,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+
+                  const SizedBox(width: 12),
+
+                  // BAR + LABEL
+                  Expanded(
+                    child: Stack(
+                      alignment: Alignment.centerLeft,
+                      children: [
+                        // BAR
+                        FractionallySizedBox(
+                          widthFactor: barWidthFactor,
+                          child: Container(
+                            height: 26,
+                            decoration: BoxDecoration(
+                              color: color,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                        ),
+
+                        // LABEL (amount + percentage)
+                        Positioned(
+                          left: labelInside
+                              ? 10
+                              : (barWidthFactor *
+                              (MediaQuery.of(context).size.width - 160)) +
+                              6,
+                          child: Text(
+                            "${val.toStringAsFixed(2)} (${percent.toStringAsFixed(1)}%)",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: labelColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             );
-          }).toList(),
-        )
+          },
+        ),
       ],
     );
   }
@@ -223,12 +270,12 @@ class _StatisticsPageState extends State<StatisticsPage> {
           const SizedBox(height: 30),
 
           // PIE CHART – EXPENSES
-          _buildPie(_expenseByCategory, "Expenses"),
+          _buildHorizontalBarChart(_expenseByCategory, "Expenses"),
 
           const SizedBox(height: 30),
 
           // PIE CHART – INCOME
-          _buildPie(_incomeByCategory, "Income"),
+          _buildHorizontalBarChart(_incomeByCategory, "Income"),
         ],
       ),
     );
