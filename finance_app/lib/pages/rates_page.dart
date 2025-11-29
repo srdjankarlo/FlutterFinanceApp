@@ -24,17 +24,15 @@ class _RatesPageState extends State<RatesPage> {
   }
 
   Future<void> _loadData() async {
-    mainCurrency =
-        Provider.of<MainCurrencyProvider>(context, listen: false).currency;
+    mainCurrency = Provider.of<MainCurrencyProvider>(context, listen: false).currency;
 
     await CurrencyConversionService.instance.reloadRates();
 
     final rates = <String, ExchangeRateModel>{};
     for (var c in Currencies.all) {
-      if (c == 'EUR') continue;
-      final model =
-      await CurrencyConversionService.instance.getRateModel(c);
-      if (model != null) rates[c] = model;
+      if (c == mainCurrency) continue;
+      final model = await CurrencyConversionService.instance.getRateModelForPair(mainCurrency, c);
+      if (model != null) rates[c] = model; // only add non-null
     }
 
     setState(() {
@@ -42,13 +40,10 @@ class _RatesPageState extends State<RatesPage> {
       controllers.clear();
       for (var c in Currencies.all) {
         if (c == mainCurrency) continue;
-        controllers[c] = TextEditingController(
-          text: '', // will populate below asynchronously
-        );
+        controllers[c] = TextEditingController(text: '');
       }
     });
 
-    // populate controller values asynchronously
     for (var c in Currencies.all) {
       if (c == mainCurrency) continue;
       final rateValue =

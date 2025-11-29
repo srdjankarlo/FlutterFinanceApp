@@ -9,7 +9,7 @@ class CategoriesPage extends StatefulWidget {
 }
 
 class _CategoriesPageState extends State<CategoriesPage> {
-  List<String> _categories = [];
+  List<Map<String, dynamic>> _categories = [];
   bool _loading = true;
 
   @override
@@ -20,9 +20,10 @@ class _CategoriesPageState extends State<CategoriesPage> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final list = await AppDatabase.instance.getCategories();
+    final db = AppDatabase.instance;
+    final cats = await db.db.then((d) => d.query('categories', orderBy: 'name'));
     setState(() {
-      _categories = list;
+      _categories = cats;
       _loading = false;
     });
   }
@@ -35,30 +36,31 @@ class _CategoriesPageState extends State<CategoriesPage> {
     _load();
   }
 
-  Future<void> _editCategory(String oldName) async {
-    final text = await _openEditDialog(initial: oldName);
+  Future<void> _editCategory(Map<String, dynamic> cat) async {
+    final text = await _openEditDialog(initial: cat['name']);
     if (text == null || text.trim().isEmpty) return;
 
-    // update in your DB (you must implement this if not existing)
-    await AppDatabase.instance.updateCategory(oldName, text.trim());
+    await AppDatabase.instance.updateCategory(cat['id'], text.trim());
     _load();
   }
 
-  Future<void> _deleteCategory(String name) async {
+  Future<void> _deleteCategory(Map<String, dynamic> cat) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text("Delete category?"),
-        content: Text("Are you sure you want to delete '$name'?"),
+        content: Text("Are you sure you want to delete '${cat['name']}'?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Delete", style: TextStyle(color: Colors.red))),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Delete", style: TextStyle(color: Colors.red))),
         ],
       ),
     );
 
     if (confirm == true) {
-      await AppDatabase.instance.deleteCategory(name);
+      await AppDatabase.instance.deleteCategory(cat['id']);
       _load();
     }
   }
@@ -89,13 +91,8 @@ class _CategoriesPageState extends State<CategoriesPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Categories"),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addCategory,
-        child: const Icon(Icons.add),
-      ),
+      appBar: AppBar(title: const Text("Categories")),
+      floatingActionButton: FloatingActionButton(onPressed: _addCategory, child: const Icon(Icons.add)),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView.builder(
@@ -106,18 +103,12 @@ class _CategoriesPageState extends State<CategoriesPage> {
           return Card(
             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: ListTile(
-              title: Text(cat, style: const TextStyle(fontWeight: FontWeight.bold)),
+              title: Text(cat['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit, color: Colors.blue),
-                    onPressed: () => _editCategory(cat),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: () => _deleteCategory(cat),
-                  ),
+                  IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _editCategory(cat)),
+                  IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _deleteCategory(cat)),
                 ],
               ),
             ),
