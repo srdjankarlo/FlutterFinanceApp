@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
-import 'package:collection/collection.dart'; // for mapIndexed
 import '../database/app_database.dart';
 import '../models/finance_item_model.dart';
+import '../models/settings_model.dart';
 import '../providers/main_currency_provider.dart';
 import '../services/currency_conversion_service.dart';
 
@@ -24,6 +22,8 @@ class _StatisticsPageState extends State<StatisticsPage> {
   Map<String, double> _expenseByCategory = {};
   Map<String, double> _incomeByCategory = {};
 
+  SettingsModel? _settings;
+
   final TextEditingController _saveController = TextEditingController();
 
   @override
@@ -40,8 +40,10 @@ class _StatisticsPageState extends State<StatisticsPage> {
     final monthStart = DateTime(now.year, now.month, 1);
     final monthEnd = DateTime(now.year, now.month + 1, 1);
 
+    // Load finance items
     final items = await db.getItemsBetween(monthStart, monthEnd);
-    final mainCurrency = Provider.of<MainCurrencyProvider>(context, listen: false).currency;
+    final mainCurrency =
+        Provider.of<MainCurrencyProvider>(context, listen: false).currency;
     final service = CurrencyConversionService.instance;
 
     // Convert all items to main currency
@@ -57,7 +59,6 @@ class _StatisticsPageState extends State<StatisticsPage> {
 
     double income = 0;
     double expense = 0;
-
     final expCat = <String, double>{};
     final incCat = <String, double>{};
 
@@ -70,6 +71,41 @@ class _StatisticsPageState extends State<StatisticsPage> {
         expense += conv;
         expCat[item.category] = (expCat[item.category] ?? 0) + conv;
       }
+    }
+
+    // Load settings
+    final settings = await db.getSettings();
+    final nowMonth = "${now.year}-${now.month.toString().padLeft(2, '0')}";
+
+    // Process accumulation if not done for this month
+    if (settings.lastProcessedMonth != nowMonth) {
+      final balance = income - expense;
+      double newPiggy = settings.piggyBank;
+      double newOwing = settings.owing;
+
+      if (balance > 0) {
+        newPiggy += balance;
+      } else if (balance < 0) {
+        newOwing += balance.abs();
+      }
+
+      await db.updateSettings(
+        SettingsModel(
+          id: 1,
+          piggyBank: newPiggy,
+          owing: newOwing,
+          lastProcessedMonth: nowMonth,
+        ),
+      );
+
+      _settings = SettingsModel(
+        id: 1,
+        piggyBank: newPiggy,
+        owing: newOwing,
+        lastProcessedMonth: nowMonth,
+      );
+    } else {
+      _settings = settings;
     }
 
     setState(() {
@@ -116,8 +152,6 @@ class _StatisticsPageState extends State<StatisticsPage> {
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-
-        // AUTO SIZED SCROLLABLE LIST OF HORIZONTAL BARS
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -127,10 +161,8 @@ class _StatisticsPageState extends State<StatisticsPage> {
             final val = entries[i].value;
             final percent = (val / total) * 100;
             final barWidthFactor = val / maxValue;
-
             final color = Colors.primaries[i % Colors.primaries.length];
 
-            // Text visibility inside bar
             final labelInside = barWidthFactor > 0.25;
             final labelColor = labelInside ? Colors.white : Colors.black;
 
@@ -138,23 +170,19 @@ class _StatisticsPageState extends State<StatisticsPage> {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(
                 children: [
-                  // CATEGORY NAME
                   SizedBox(
                     width: 100,
                     child: Text(
                       cat,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w500),
                     ),
                   ),
-
                   const SizedBox(width: 12),
-
-                  // BAR + LABEL
                   Expanded(
                     child: Stack(
                       alignment: Alignment.centerLeft,
                       children: [
-                        // BAR
                         FractionallySizedBox(
                           widthFactor: barWidthFactor,
                           child: Container(
@@ -165,8 +193,6 @@ class _StatisticsPageState extends State<StatisticsPage> {
                             ),
                           ),
                         ),
-
-                        // LABEL (amount + percentage)
                         Positioned(
                           left: labelInside
                               ? 10
@@ -209,45 +235,135 @@ class _StatisticsPageState extends State<StatisticsPage> {
         children: [
           // MONTH SUMMARY
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("This month", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                  const SizedBox(height: 10),
-                  Text("Income: ${_monthIncome.toStringAsFixed(2)} $main", style: const TextStyle(color: Colors.green)),
-                  Text("Expense: ${_monthExpense.toStringAsFixed(2)} $main", style: const TextStyle(color: Colors.red)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "This month",
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 25),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            "Piggy bank: ${_settings?.piggyBank.toStringAsFixed(2) ?? "0"} $main",
+                            style: const TextStyle(
+                                color: Colors.orange,
+                                fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            "Owing: ${_settings?.owing.toStringAsFixed(2) ?? "0"} $main",
+                            style: const TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 6),
+                          TextButton(
+                            onPressed: () async {
+                              final confirmed = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text("Confirm Reset"),
+                                  content: const Text(
+                                      "Are you sure you want to reset Piggy Bank and Owing Money values?"),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.of(context).pop(false),
+                                      child: const Text("Cancel"),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: () => Navigator.of(context).pop(true),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.red,
+                                      ),
+                                      child: const Text("Reset"),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (confirmed == true) {
+                                await AppDatabase.instance.updateSettings(SettingsModel(
+                                  id: 1,
+                                  piggyBank: 0,
+                                  owing: 0,
+                                  lastProcessedMonth: _settings!.lastProcessedMonth,
+                                ));
+
+                                setState(() => _settings = SettingsModel(
+                                  id: 1,
+                                  piggyBank: 0,
+                                  owing: 0,
+                                  lastProcessedMonth: _settings!.lastProcessedMonth,
+                                ));
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text("Values have been reset.")),
+                                );
+                              }
+                            },
+                            style: TextButton.styleFrom(
+                              backgroundColor: Colors.red, // button color
+                              foregroundColor: Colors.white, // text color
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: const Text(
+                              "Reset",
+                              style: TextStyle(fontSize: 20),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text("Income: ${_monthIncome.toStringAsFixed(2)} $main",
+                      style: const TextStyle(color: Colors.green)),
+                  Text("Expense: ${_monthExpense.toStringAsFixed(2)} $main",
+                      style: const TextStyle(color: Colors.red)),
                   const SizedBox(height: 8),
                   Text(
                     "Balance: ${balance.toStringAsFixed(2)} $main",
                     style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: balance >= 0 ? Colors.blue : Colors.redAccent),
+                      fontWeight: FontWeight.bold,
+                      color: balance >= 0 ? Colors.blue : Colors.redAccent,
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-
           const SizedBox(height: 20),
 
-          // SAVINGS CALCULATOR
+          // DAILY SPEND LIMIT
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text("Daily Spend Limit Calculator",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 18)),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _saveController,
                     decoration: InputDecoration(
-                        labelText: "How much do you want to save $main monthly?"),
+                        labelText:
+                        "How much do you want to save $main monthly?"),
                     keyboardType: TextInputType.number,
                     onChanged: (_) => setState(() {}),
                   ),
@@ -260,21 +376,20 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   else
                     Text(
                       "You can spend: ${dailyLimit.toStringAsFixed(2)} $main per day",
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, color: Colors.blue),
                     ),
                 ],
               ),
             ),
           ),
-
           const SizedBox(height: 30),
 
-          // PIE CHART – EXPENSES
+          // EXPENSES BAR CHART
           _buildHorizontalBarChart(_expenseByCategory, "Expenses"),
-
           const SizedBox(height: 30),
 
-          // PIE CHART – INCOME
+          // INCOME BAR CHART
           _buildHorizontalBarChart(_incomeByCategory, "Income"),
         ],
       ),
