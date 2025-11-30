@@ -2,7 +2,6 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/finance_item_model.dart';
 import '../models/exchange_rate_model.dart';
-import '../models/settings_model.dart';
 
 class AppDatabase {
   AppDatabase._privateConstructor();
@@ -153,24 +152,6 @@ class AppDatabase {
       'exchange_rates',
       where: 'main_currency = ? AND target_currency = ?',
       whereArgs: [main, target],
-    );
-  }
-
-  // LOAD SETTINGS
-  Future<SettingsModel> getSettings() async {
-    final database = await db;
-    final res = await database.query("settings", where: "id = 1", limit: 1);
-
-    return SettingsModel.fromMap(res.first);
-  }
-
-// UPDATE SETTINGS
-  Future<void> updateSettings(SettingsModel model) async {
-    final database = await db;
-    await database.update(
-      'settings',
-      model.toMap(),
-      where: 'id = 1',
     );
   }
 

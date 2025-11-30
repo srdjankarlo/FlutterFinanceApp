@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../database/app_database.dart';
 import '../models/finance_item_model.dart';
-import '../models/settings_model.dart';
 import '../providers/main_currency_provider.dart';
 import '../services/currency_conversion_service.dart';
 
@@ -11,6 +10,27 @@ class StatisticsPage extends StatefulWidget {
 
   @override
   State<StatisticsPage> createState() => _StatisticsPageState();
+}
+
+enum StatsRangeType {
+  thisMonth,
+  lastMonth,
+  allTime,
+  specificMonth,
+  specificDay,
+  customRange,
+}
+
+class StatsRange {
+  final StatsRangeType type;
+  final DateTime start;
+  final DateTime end;
+
+  StatsRange({
+    required this.type,
+    required this.start,
+    required this.end,
+  });
 }
 
 class _StatisticsPageState extends State<StatisticsPage> {
@@ -22,13 +42,19 @@ class _StatisticsPageState extends State<StatisticsPage> {
   Map<String, double> _expenseByCategory = {};
   Map<String, double> _incomeByCategory = {};
 
-  SettingsModel? _settings;
-
   final TextEditingController _saveController = TextEditingController();
+
+  StatsRange? _selectedRange;
 
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    _selectedRange = StatsRange(
+      type: StatsRangeType.thisMonth,
+      start: DateTime(now.year, now.month, 1),
+      end: DateTime(now.year, now.month + 1, 1),
+    );
     _load();
   }
 
@@ -37,11 +63,16 @@ class _StatisticsPageState extends State<StatisticsPage> {
 
     final db = AppDatabase.instance;
     final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month, 1);
-    final monthEnd = DateTime(now.year, now.month + 1, 1);
+    // final monthStart = DateTime(now.year, now.month, 1);
+    // final monthEnd = DateTime(now.year, now.month + 1, 1);
+    //
+    // // Load finance items
+    // final items = await db.getItemsBetween(monthStart, monthEnd);
+    final items = await db.getItemsBetween(
+      _selectedRange!.start,
+      _selectedRange!.end,
+    );
 
-    // Load finance items
-    final items = await db.getItemsBetween(monthStart, monthEnd);
     final mainCurrency =
         Provider.of<MainCurrencyProvider>(context, listen: false).currency;
     final service = CurrencyConversionService.instance;
@@ -71,41 +102,6 @@ class _StatisticsPageState extends State<StatisticsPage> {
         expense += conv;
         expCat[item.category] = (expCat[item.category] ?? 0) + conv;
       }
-    }
-
-    // Load settings
-    final settings = await db.getSettings();
-    final nowMonth = "${now.year}-${now.month.toString().padLeft(2, '0')}";
-
-    // Process accumulation if not done for this month
-    if (settings.lastProcessedMonth != nowMonth) {
-      final balance = income - expense;
-      double newPiggy = settings.piggyBank;
-      double newOwing = settings.owing;
-
-      if (balance > 0) {
-        newPiggy += balance;
-      } else if (balance < 0) {
-        newOwing += balance.abs();
-      }
-
-      await db.updateSettings(
-        SettingsModel(
-          id: 1,
-          piggyBank: newPiggy,
-          owing: newOwing,
-          lastProcessedMonth: nowMonth,
-        ),
-      );
-
-      _settings = SettingsModel(
-        id: 1,
-        piggyBank: newPiggy,
-        owing: newOwing,
-        lastProcessedMonth: nowMonth,
-      );
-    } else {
-      _settings = settings;
     }
 
     setState(() {
@@ -160,10 +156,15 @@ class _StatisticsPageState extends State<StatisticsPage> {
             final cat = entries[i].key;
             final val = entries[i].value;
             final percent = (val / total) * 100;
-            final barWidthFactor = val / maxValue;
+            final barWidthFactor = maxValue == 0 ? 0 : (val / maxValue);
+            final double safeWidthFactor =
+            barWidthFactor.isNaN || barWidthFactor.isInfinite
+                ? 0
+                : barWidthFactor.clamp(0.0, 1.0).toDouble();
+
             final color = Colors.primaries[i % Colors.primaries.length];
 
-            final labelInside = barWidthFactor > 0.25;
+            final labelInside = safeWidthFactor > 0.25;
             final labelColor = labelInside ? Colors.white : Colors.black;
 
             return Padding(
@@ -184,7 +185,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                       alignment: Alignment.centerLeft,
                       children: [
                         FractionallySizedBox(
-                          widthFactor: barWidthFactor,
+                          widthFactor: safeWidthFactor,
                           child: Container(
                             height: 26,
                             decoration: BoxDecoration(
@@ -196,7 +197,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                         Positioned(
                           left: labelInside
                               ? 10
-                              : (barWidthFactor *
+                              : (safeWidthFactor *
                               (MediaQuery.of(context).size.width - 160)) +
                               6,
                           child: Text(
@@ -245,85 +246,105 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        "This month",
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 25),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            "Piggy bank: ${_settings?.piggyBank.toStringAsFixed(2) ?? "0"} $main",
-                            style: const TextStyle(
-                                color: Colors.orange,
-                                fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            "Owing: ${_settings?.owing.toStringAsFixed(2) ?? "0"} $main",
-                            style: const TextStyle(
-                                color: Colors.red,
-                                fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 6),
-                          TextButton(
-                            onPressed: () async {
-                              final confirmed = await showDialog<bool>(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text("Confirm Reset"),
-                                  content: const Text(
-                                      "Are you sure you want to reset Piggy Bank and Owing Money values?"),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.of(context).pop(false),
-                                      child: const Text("Cancel"),
-                                    ),
-                                    ElevatedButton(
-                                      onPressed: () => Navigator.of(context).pop(true),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.red,
-                                      ),
-                                      child: const Text("Reset"),
-                                    ),
-                                  ],
-                                ),
+                      DropdownButton<StatsRangeType>(
+                        value: _selectedRange!.type,
+                        items: const [
+                          DropdownMenuItem(
+                              value: StatsRangeType.thisMonth, child: Text("This month")),
+                          DropdownMenuItem(
+                              value: StatsRangeType.lastMonth, child: Text("Last month")),
+                          DropdownMenuItem(
+                              value: StatsRangeType.allTime, child: Text("All time")),
+                          DropdownMenuItem(
+                              value: StatsRangeType.specificMonth, child: Text("Pick month")),
+                          DropdownMenuItem(
+                              value: StatsRangeType.specificDay, child: Text("Pick a day")),
+                          DropdownMenuItem(
+                              value: StatsRangeType.customRange, child: Text("Custom range")),
+                        ],
+                        onChanged: (value) async {
+                          if (value == null) return;
+
+                          final now = DateTime.now();
+
+                          switch (value) {
+                            case StatsRangeType.thisMonth:
+                              _selectedRange = StatsRange(
+                                type: value,
+                                start: DateTime(now.year, now.month, 1),
+                                end: DateTime(now.year, now.month + 1, 1),
                               );
+                              break;
 
-                              if (confirmed == true) {
-                                await AppDatabase.instance.updateSettings(SettingsModel(
-                                  id: 1,
-                                  piggyBank: 0,
-                                  owing: 0,
-                                  lastProcessedMonth: _settings!.lastProcessedMonth,
-                                ));
+                            case StatsRangeType.lastMonth:
+                              final lastMonth = DateTime(now.year, now.month - 1, 1);
+                              _selectedRange = StatsRange(
+                                type: value,
+                                start: lastMonth,
+                                end: DateTime(lastMonth.year, lastMonth.month + 1, 1),
+                              );
+                              break;
 
-                                setState(() => _settings = SettingsModel(
-                                  id: 1,
-                                  piggyBank: 0,
-                                  owing: 0,
-                                  lastProcessedMonth: _settings!.lastProcessedMonth,
-                                ));
+                            case StatsRangeType.allTime:
+                              _selectedRange = StatsRange(
+                                type: value,
+                                start: DateTime(1970, 1, 1),
+                                end: DateTime.now().add(const Duration(days: 1)),
+                              );
+                              break;
 
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text("Values have been reset.")),
+                            case StatsRangeType.specificMonth:
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: now,
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime.now(),
+                                initialDatePickerMode: DatePickerMode.year,
+                              );
+                              if (picked != null) {
+                                _selectedRange = StatsRange(
+                                  type: value,
+                                  start: DateTime(picked.year, picked.month, 1),
+                                  end: DateTime(picked.year, picked.month + 1, 1),
                                 );
                               }
-                            },
-                            style: TextButton.styleFrom(
-                              backgroundColor: Colors.red, // button color
-                              foregroundColor: Colors.white, // text color
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            child: const Text(
-                              "Reset",
-                              style: TextStyle(fontSize: 20),
-                            ),
-                          ),
-                        ],
+                              break;
+
+                            case StatsRangeType.specificDay:
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: now,
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime.now(),
+                              );
+                              if (picked != null) {
+                                _selectedRange = StatsRange(
+                                  type: value,
+                                  start: picked,
+                                  end: picked.add(const Duration(days: 1)),
+                                );
+                              }
+                              break;
+
+                            case StatsRangeType.customRange:
+                              final range = await showDateRangePicker(
+                                context: context,
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime.now(),
+                              );
+                              if (range != null) {
+                                _selectedRange = StatsRange(
+                                  type: value,
+                                  start: range.start,
+                                  end: range.end.add(const Duration(days: 1)),
+                                );
+                              }
+                              break;
+                          }
+
+                          setState(() {});
+                          _load();
+                        },
                       ),
                     ],
                   ),
