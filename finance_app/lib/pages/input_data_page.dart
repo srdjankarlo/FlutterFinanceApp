@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../constants/currencies.dart';
 import '../database/app_database.dart';
 import '../models/finance_item_model.dart';
+import 'categories_page.dart';
 
 class InputDataPage extends StatefulWidget {
   const InputDataPage({super.key});
@@ -123,7 +124,43 @@ class _InputDataPageState extends State<InputDataPage> {
     final onPrimary = Theme.of(context).colorScheme.onSecondary;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Input Finance Data')),
+      appBar: AppBar(
+        title: const Text('Input Finance Data'),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) async {
+              switch (value) {
+                case 'categories':
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const CategoriesPage()),
+                  );
+                  _loadCategories(); // reload categories after returning
+                  break;
+
+                case 'currencies':
+                // Replace RatesPage with your actual rates page
+                //   await Navigator.of(context).push(
+                //     MaterialPageRoute(builder: (_) => const RatesPage()),
+                //   );
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Page not implemented yet')),
+                  );
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'categories',
+                child: Text('Manage Categories'),
+              ),
+              const PopupMenuItem(
+                value: 'currencies',
+                child: Text('Manage Currencies'),
+              ),
+            ],
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Form(

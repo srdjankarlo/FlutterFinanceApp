@@ -4,7 +4,6 @@ import 'package:finance_app/pages/rates_page.dart';
 import 'package:finance_app/pages/statistics_page.dart';
 import 'package:flutter/material.dart';
 import '../widgets/settings_drawer.dart';
-import 'categories_page.dart';
 
 class StartingPage extends StatelessWidget {
   const StartingPage({super.key});
@@ -13,7 +12,6 @@ class StartingPage extends StatelessWidget {
     'Input',
     'List Inputs',
     'Statistics',
-    'Categories',
     'Rates'
   ];
 
@@ -61,14 +59,6 @@ class StartingPage extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => const StatisticsPage()),
-                    );
-                    // ScaffoldMessenger.of(context).showSnackBar(
-                    //   SnackBar(content: Text('$item page not implemented yet')),
-                    // );
-                  } else if (item == 'Categories') {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const CategoriesPage()),
                     );
                     // ScaffoldMessenger.of(context).showSnackBar(
                     //   SnackBar(content: Text('$item page not implemented yet')),
