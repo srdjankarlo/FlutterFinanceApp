@@ -1,23 +1,23 @@
-import '../constants/currencies.dart';
 import '../database/app_database.dart';
 import '../models/exchange_rate_model.dart';
 
 class CurrencyConversionService {
-  static final CurrencyConversionService instance = CurrencyConversionService._init();
-  CurrencyConversionService._init();
+  static final CurrencyConversionService instance = CurrencyConversionService._();
 
-  final Map<String, ExchangeRateModel> _eurRates = {};
+  CurrencyConversionService._();
+
+  final Map<String, ExchangeRateModel> _cache = {};
   bool _loaded = false;
 
-  /// Load all EUR->X rates from database
-  Future<void> loadRates() async {
+  Future<void> _load() async {
     if (_loaded) return;
 
-    _eurRates.clear();
-    for (var c in Currencies.all) {
-      if (c == 'EUR') continue;
-      final model = await AppDatabase.instance.getExchangeRate(main: 'EUR', target: c);
-      if (model != null) _eurRates[c] = model;
+    _cache.clear();
+    final db = AppDatabase.instance;
+    final allPairs = await db.getAllExchangeRates();
+
+    for (final m in allPairs) {
+      _cache['${m.mainCurrency}_${m.targetCurrency}'] = m;
     }
 
     _loaded = true;
@@ -25,116 +25,80 @@ class CurrencyConversionService {
 
   Future<void> reloadRates() async {
     _loaded = false;
-    await loadRates();
+    await _load();
   }
 
+  // READ: return direct rate if exists
+  Future<double?> getRate(String main, String target) async {
+    await _load();
+    if (main == target) return 1;
+
+    final key = '${main}_${target}';
+    return _cache[key]?.rate;
+  }
+
+  // READ model directly
+  Future<ExchangeRateModel?> getRateModel(String main, String target) async {
+    await _load();
+    return _cache['${main}_${target}'];
+  }
+
+  // CONVERT directly using pair
   Future<double?> convert({
-    required double amount,
     required String from,
     required String to,
+    required double amount,
   }) async {
-    await loadRates();
-    if (from == to) return amount;
-
-    final eurFrom = from == 'EUR' ? 1.0 : _eurRates[from]?.rate;
-    final eurTo = to == 'EUR' ? 1.0 : _eurRates[to]?.rate;
-
-    if (eurFrom == null || eurTo == null || eurFrom == 0) return null;
-
-    return amount * (eurTo / eurFrom);
+    final rate = await getRate(from, to);
+    if (rate == null) return null;
+    return amount * rate;
   }
 
-  Future<double> getDisplayRate(String main, String target) async {
-    await loadRates();
-    if (main == target) return 1.0;
-
-    final eurMain = main == 'EUR' ? 1.0 : _eurRates[main]?.rate;
-    final eurTarget = target == 'EUR' ? 1.0 : _eurRates[target]?.rate;
-
-    if (eurMain == null || eurTarget == null || eurMain == 0) return 0;
-
-    return eurTarget / eurMain;
-  }
-
-  Future<bool> upsertFromMain({
+  // SAVE direct + reverse
+  Future<bool> savePair({
     required String main,
     required String target,
-    required double inputValue,
+    required double rate,
   }) async {
-    await loadRates();
-    if (main == target) return false;
+    if (rate == 0) return false;
 
     final now = DateTime.now();
-    late ExchangeRateModel model;
+    final db = AppDatabase.instance;
 
-    if (main == 'EUR') {
-      model = ExchangeRateModel(
-        mainCurrency: 'EUR',
-        targetCurrency: target,
-        rate: inputValue,
-        timestamp: now,
-      );
-      _eurRates[target] = model;
-    } else if (target == 'EUR') {
-      if (inputValue == 0) return false;
-      model = ExchangeRateModel(
-        mainCurrency: 'EUR',
-        targetCurrency: main,
-        rate: 1 / inputValue,
-        timestamp: now,
-      );
-      _eurRates[main] = model;
-    } else {
-      final eurMain = _eurRates[main]?.rate;
-      if (eurMain == null) return false;
-      model = ExchangeRateModel(
-        mainCurrency: 'EUR',
-        targetCurrency: target,
-        rate: eurMain * inputValue,
-        timestamp: now,
-      );
-      _eurRates[target] = model;
+    final direct = ExchangeRateModel(
+      mainCurrency: main,
+      targetCurrency: target,
+      rate: rate,
+      timestamp: now,
+    );
+
+    final reverse = ExchangeRateModel(
+      mainCurrency: target,
+      targetCurrency: main,
+      rate: 1 / rate,
+      timestamp: now,
+    );
+
+    final ok1 = await db.upsertExchangeRate(direct);
+    final ok2 = await db.upsertExchangeRate(reverse);
+
+    if (ok1 && ok2) {
+      _cache['${main}_${target}'] = direct;
+      _cache['${target}_${main}'] = reverse;
+      return true;
     }
 
-    return await AppDatabase.instance.upsertExchangeRate(model);
+    return false;
   }
 
-  Future<void> deleteRate(String target) async {
-    await AppDatabase.instance.deleteExchangeRate(main: 'EUR', target: target);
-    _eurRates.remove(target);
+  // DELETE both directions
+  Future<void> deletePair(String main, String target) async {
+    final db = AppDatabase.instance;
+
+    await db.deleteExchangeRate(main: main, target: target);
+    await db.deleteExchangeRate(main: target, target: main);
+
+    _cache.remove('${main}_${target}');
+    _cache.remove('${target}_${main}');
   }
-
-  Future<ExchangeRateModel?> getRateModel(String target) async {
-    await loadRates();
-    return _eurRates[target];
-  }
-
-  Future<Map<String, double>> getEurRates() async {
-    await loadRates();
-    return _eurRates.map((key, value) => MapEntry(key, value.rate));
-  }
-
-  /// Returns ExchangeRateModel for main -> target, or null if not set
-  Future<ExchangeRateModel?> getRateModelForPair(String main, String target) async {
-    await loadRates();
-
-    if (main == 'EUR') {
-      return _eurRates[target];
-    } else if (target == 'EUR') {
-      return _eurRates[main];
-    } else {
-      final eurMainRate = _eurRates[main]?.rate;
-      final eurTargetRate = _eurRates[target]?.rate;
-      if (eurMainRate == null || eurTargetRate == null) return null;
-
-      // Construct virtual model for display
-      return ExchangeRateModel(
-        mainCurrency: main,
-        targetCurrency: target,
-        rate: eurTargetRate / eurMainRate,
-        timestamp: DateTime.now(), // Optional: could leave null or show earliest relevant
-      );
-    }
-  }
-
 }

@@ -103,7 +103,7 @@ class _InputDataPageState extends State<InputDataPage> {
       await _loadCategories();
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✓ Item saved')),
+        const SnackBar(content: Text('Item saved')),
       );
 
       await Future.delayed(const Duration(milliseconds: 350));

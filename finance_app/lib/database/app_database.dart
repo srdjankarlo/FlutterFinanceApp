@@ -129,6 +129,12 @@ class AppDatabase {
   }
 
   // Exchange Rates
+  Future<List<ExchangeRateModel>> getAllExchangeRates() async {
+    final database = await db;
+    final res = await database.query('exchange_rates');
+    return res.map((e) => ExchangeRateModel.fromMap(e)).toList();
+  }
+
   Future<ExchangeRateModel?> getExchangeRate({required String main, required String target}) async {
     final database = await db;
     final res = await database.query(

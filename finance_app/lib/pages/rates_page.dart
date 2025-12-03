@@ -14,42 +14,37 @@ class RatesPage extends StatefulWidget {
 
 class _RatesPageState extends State<RatesPage> {
   final Map<String, TextEditingController> controllers = {};
-  Map<String, ExchangeRateModel> currentRates = {};
+  Map<String, ExchangeRateModel?> currentRates = {};
   String mainCurrency = "";
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _load();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _load() async {
     mainCurrency = Provider.of<MainCurrencyProvider>(context, listen: false).currency;
 
     await CurrencyConversionService.instance.reloadRates();
 
-    final rates = <String, ExchangeRateModel>{};
+    final rates = <String, ExchangeRateModel?>{};
     for (var c in Currencies.all) {
       if (c == mainCurrency) continue;
-      final model = await CurrencyConversionService.instance.getRateModelForPair(mainCurrency, c);
-      if (model != null) rates[c] = model; // only add non-null
+      rates[c] = await CurrencyConversionService.instance.getRateModel(mainCurrency, c);
     }
 
     setState(() {
       currentRates = rates;
       controllers.clear();
+
       for (var c in Currencies.all) {
         if (c == mainCurrency) continue;
-        controllers[c] = TextEditingController(text: '');
+        controllers[c] = TextEditingController(
+          text: currentRates[c]?.rate.toString() ?? '',
+        );
       }
     });
-
-    for (var c in Currencies.all) {
-      if (c == mainCurrency) continue;
-      final rateValue =
-      await CurrencyConversionService.instance.getDisplayRate(mainCurrency, c);
-      controllers[c]?.text = rateValue.toStringAsFixed(6);
-    }
   }
 
   Future<void> _saveRate(String target) async {
@@ -59,31 +54,23 @@ class _RatesPageState extends State<RatesPage> {
     final value = double.tryParse(text);
     if (value == null) return;
 
-    final success = await CurrencyConversionService.instance.upsertFromMain(
+    final ok = await CurrencyConversionService.instance.savePair(
       main: mainCurrency,
       target: target,
-      inputValue: value,
+      rate: value,
     );
 
-    if (success) {
+    if (ok) {
+      await _load();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Rate saved!')),
-      );
-      await _loadData();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Failed to save rate (missing base rate).')),
+        const SnackBar(content: Text('Saved')),
       );
     }
   }
 
   Future<void> _deleteRate(String target) async {
-    await CurrencyConversionService.instance.deleteRate(target);
-    setState(() {
-      controllers[target]?.text = '';
-      currentRates.remove(target);
-    });
+    await CurrencyConversionService.instance.deletePair(mainCurrency, target);
+    await _load();
   }
 
   @override
@@ -93,25 +80,28 @@ class _RatesPageState extends State<RatesPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Exchange Rates')),
       body: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            Text('Main currency: $mainCurrency',
-                style:
-                const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(
+              'Main currency: $mainCurrency',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 12),
             Expanded(
               child: ListView.builder(
                 itemCount: items.length,
                 itemBuilder: (_, i) {
                   final curr = items[i];
-                  final rate = currentRates[curr];
+                  final model = currentRates[curr];
 
                   return Card(
                     child: ListTile(
-                      subtitle: Text(rate == null
-                          ? 'No rate set'
-                          : 'Last updated: ${rate.timestamp.toLocal().toString().split(".")[0]}'),
+                      subtitle: Text(
+                        model == null
+                            ? 'No rate'
+                            : 'Updated: ${model.timestamp.toLocal().toString().split(".")[0]}',
+                      ),
                       trailing: SizedBox(
                         width: 210,
                         child: Row(
@@ -119,16 +109,10 @@ class _RatesPageState extends State<RatesPage> {
                             Expanded(
                               child: TextField(
                                 controller: controllers[curr],
-                                keyboardType:
-                                const TextInputType.numberWithOptions(
-                                    decimal: true),
-                                textAlign: TextAlign.right,
-                                decoration: InputDecoration(
-                                  suffixText: curr,
-                                  hintText: 'Rate',
-                                ),
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                               ),
                             ),
+                            Text(curr),
                             IconButton(
                               icon: const Icon(Icons.save),
                               onPressed: () => _saveRate(curr),
