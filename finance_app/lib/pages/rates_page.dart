@@ -103,7 +103,7 @@ class _RatesPageState extends State<RatesPage> {
                             : 'Updated: ${model.timestamp.toLocal().toString().split(".")[0]}',
                       ),
                       trailing: SizedBox(
-                        width: 210,
+                        width: 240,
                         child: Row(
                           children: [
                             Expanded(
@@ -112,7 +112,7 @@ class _RatesPageState extends State<RatesPage> {
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                               ),
                             ),
-                            Text(curr),
+                            Text(' $curr', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),),
                             IconButton(
                               icon: const Icon(Icons.save),
                               onPressed: () => _saveRate(curr),

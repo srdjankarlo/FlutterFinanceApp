@@ -135,17 +135,6 @@ class AppDatabase {
     return res.map((e) => ExchangeRateModel.fromMap(e)).toList();
   }
 
-  Future<ExchangeRateModel?> getExchangeRate({required String main, required String target}) async {
-    final database = await db;
-    final res = await database.query(
-      'exchange_rates',
-      where: 'main_currency = ? AND target_currency = ?',
-      whereArgs: [main, target],
-    );
-    if (res.isEmpty) return null;
-    return ExchangeRateModel.fromMap(res.first);
-  }
-
   Future<bool> upsertExchangeRate(ExchangeRateModel model) async {
     final database = await db;
     final id = await database.insert('exchange_rates', model.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
