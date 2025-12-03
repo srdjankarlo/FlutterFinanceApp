@@ -50,23 +50,6 @@ class AppDatabase {
       );
     ''');
 
-    await db.execute('''
-      CREATE TABLE settings (
-        id INTEGER PRIMARY KEY,
-        piggy_bank REAL NOT NULL,
-        owing REAL NOT NULL,
-        last_processed_month TEXT NOT NULL
-      );
-    ''');
-
-    // INSERT DEFAULT SETTINGS ROW
-    await db.insert('settings', {
-      'id': 1,
-      'piggy_bank': 0.0,
-      'owing': 0.0,
-      'last_processed_month': ''
-    });
-
   }
 
   // Finance Item
