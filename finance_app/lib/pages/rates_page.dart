@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/main_currency_provider.dart';
 import '../services/currency_conversion_service.dart';
-import '../constants/currencies.dart';
+import '../database/app_database.dart';
 import '../models/exchange_rate_model.dart';
 
 class RatesPage extends StatefulWidget {
@@ -29,7 +29,8 @@ class _RatesPageState extends State<RatesPage> {
     await CurrencyConversionService.instance.reloadRates();
 
     final rates = <String, ExchangeRateModel?>{};
-    for (var c in Currencies.all) {
+    final currencyList = await AppDatabase.instance.getCurrencies();
+    for (var c in currencyList) {
       if (c == mainCurrency) continue;
       rates[c] = await CurrencyConversionService.instance.getRateModel(mainCurrency, c);
     }
@@ -38,7 +39,7 @@ class _RatesPageState extends State<RatesPage> {
       currentRates = rates;
       controllers.clear();
 
-      for (var c in Currencies.all) {
+      for (var c in currencyList) {
         if (c == mainCurrency) continue;
         controllers[c] = TextEditingController(
           text: currentRates[c]?.rate.toString() ?? '',
@@ -75,7 +76,7 @@ class _RatesPageState extends State<RatesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final items = Currencies.all.where((c) => c != mainCurrency).toList();
+    final items = currentRates.keys.toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Exchange Rates')),
@@ -96,6 +97,7 @@ class _RatesPageState extends State<RatesPage> {
                   final model = currentRates[curr];
 
                   return Card(
+                    color: Theme.of(context).colorScheme.secondary,
                     child: ListTile(
                       subtitle: Text(
                         model == null

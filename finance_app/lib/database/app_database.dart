@@ -50,9 +50,21 @@ class AppDatabase {
       );
     ''');
 
+    await db.execute('''
+      CREATE TABLE currencies (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT UNIQUE NOT NULL
+      );
+    ''');
+
+    // Pre-populate
+    await db.insert('currencies', {'code': 'EUR'});
+    await db.insert('currencies', {'code': 'USD'});
+    await db.insert('currencies', {'code': 'GBP'});
+
   }
 
-  // Finance Item
+  // -------------------------------------------------------------- Finance Item
   Future<int> insertItem(FinanceItemModel item) async {
     final database = await db;
     return await database.insert('finance_item', item.toMap());
@@ -89,7 +101,7 @@ class AppDatabase {
     return await database.delete('finance_item', where: 'id = ?', whereArgs: [id]);
   }
 
-  // Categories
+  // ---------------------------------------------------------------- Categories
   Future<int> insertCategory(String name) async {
     final database = await db;
     return await database.insert('categories', {'name': name}, conflictAlgorithm: ConflictAlgorithm.ignore);
@@ -111,7 +123,17 @@ class AppDatabase {
     return await database.delete('categories', where: 'id = ?', whereArgs: [id]);
   }
 
-  // Exchange Rates
+  Future<void> updateCategoryByName(String oldName, String newName) async {
+    final dbClient = await db;
+    await dbClient.update('categories', {'name': newName}, where: 'name = ?', whereArgs: [oldName]);
+  }
+
+  Future<void> deleteCategoryByName(String name) async {
+    final dbClient = await db;
+    await dbClient.delete('categories', where: 'name = ?', whereArgs: [name]);
+  }
+
+  // ------------------------------------------------------------ Exchange Rates
   Future<List<ExchangeRateModel>> getAllExchangeRates() async {
     final database = await db;
     final res = await database.query('exchange_rates');
@@ -130,6 +152,60 @@ class AppDatabase {
       'exchange_rates',
       where: 'main_currency = ? AND target_currency = ?',
       whereArgs: [main, target],
+    );
+  }
+
+  // ---------------------------------------------------------------- Currencies
+  Future<int> insertCurrency(String code) async {
+    final database = await db;
+    return await database.insert(
+      'currencies',
+      {'code': code},
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  Future<List<String>> getCurrencies() async {
+    final database = await db;
+    final res = await database.query('currencies', orderBy: 'code');
+    return res.map((e) => e['code'] as String).toList();
+  }
+
+  Future<int> updateCurrency(int id, String newCode) async {
+    final database = await db;
+    return await database.update(
+      'currencies',
+      {'code': newCode},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> deleteCurrency(int id) async {
+    final database = await db;
+    return await database.delete(
+      'currencies',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> updateCurrencyByCode(String oldCode, String newCode) async {
+    final dbClient = await db;
+    await dbClient.update(
+      'currencies',
+      {'code': newCode},
+      where: 'code = ?',
+      whereArgs: [oldCode],
+    );
+  }
+
+  Future<void> deleteCurrencyByCode(String code) async {
+    final dbClient = await db;
+    await dbClient.delete(
+      'currencies',
+      where: 'code = ?',
+      whereArgs: [code],
     );
   }
 

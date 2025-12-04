@@ -4,6 +4,7 @@ import '../database/app_database.dart';
 import '../models/finance_item_model.dart';
 import '../providers/main_currency_provider.dart';
 import '../services/currency_conversion_service.dart';
+import '../widgets/outline_text.dart';
 
 class StatisticsPage extends StatefulWidget {
   const StatisticsPage({super.key});
@@ -238,6 +239,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
           Card(
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12)),
+            color: Theme.of(context).colorScheme.secondary,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -349,28 +351,41 @@ class _StatisticsPageState extends State<StatisticsPage> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Text("Income: ${_monthIncome.toStringAsFixed(2)} $main",
-                      style: const TextStyle(color: Colors.green)),
-                  Text("Expense: ${_monthExpense.toStringAsFixed(2)} $main",
-                      style: const TextStyle(color: Colors.red)),
+                  OutlinedText(
+                    text: "Income: ${_monthIncome.toStringAsFixed(2)} $main",
+                    size: 18,
+                    strokeWidth: 3,
+                    outlineColor: Colors.black,
+                    fillColor: Colors.green,
+                  ),
+                  OutlinedText(
+                    text: "Expense: ${_monthExpense.toStringAsFixed(2)} $main",
+                    size: 18,
+                    strokeWidth: 3,
+                    outlineColor: Colors.black,
+                    fillColor: Colors.red,
+                  ),
                   const SizedBox(height: 8),
-                  Text(
-                    "Balance: ${balance.toStringAsFixed(2)} $main",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: balance >= 0 ? Colors.blue : Colors.redAccent,
-                    ),
+                  OutlinedText(
+                    text: 'Balance: ${balance.toStringAsFixed(2)} $main',
+                    size: 18,
+                    strokeWidth: 3,
+                    outlineColor: Colors.black,
+                    fillColor: balance > 0
+                        ? Colors.green
+                        : Colors.red,
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 5),
 
           // DAILY SPEND LIMIT
           Card(
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12)),
+            color: Theme.of(context).colorScheme.secondary,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -379,7 +394,6 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   const Text("Daily Spend Limit Calculator",
                       style: TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 18)),
-                  const SizedBox(height: 10),
                   TextField(
                     controller: _saveController,
                     decoration: InputDecoration(
@@ -388,17 +402,13 @@ class _StatisticsPageState extends State<StatisticsPage> {
                     keyboardType: TextInputType.number,
                     onChanged: (_) => setState(() {}),
                   ),
-                  const SizedBox(height: 12),
                   if (dailyLimit == null)
                     const Text(
                       "Enter valid amount. Must be less than balance.",
-                      style: TextStyle(color: Colors.red),
                     )
                   else
                     Text(
                       "You can spend: ${dailyLimit.toStringAsFixed(2)} $main per day",
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, color: Colors.blue),
                     ),
                 ],
               ),

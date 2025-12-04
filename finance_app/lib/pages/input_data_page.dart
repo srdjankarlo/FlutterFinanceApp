@@ -1,10 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../constants/currencies.dart';
 import '../database/app_database.dart';
 import '../models/finance_item_model.dart';
-import 'categories_page.dart';
 
 class InputDataPage extends StatefulWidget {
   const InputDataPage({super.key});
@@ -27,9 +25,13 @@ class _InputDataPageState extends State<InputDataPage> {
 
   List<String> _categories = [];
 
+  List<String> _currencies = [];
+  String? _selectedCurrency;
+
   @override
   void initState() {
     super.initState();
+    _loadCurrencies();
     _loadCategories();
   }
 
@@ -41,6 +43,115 @@ class _InputDataPageState extends State<InputDataPage> {
     super.dispose();
   }
 
+  Future<void> _loadCurrencies() async {
+    final list = await AppDatabase.instance.getCurrencies();
+    setState(() {
+      _currencies = list;
+      if (_selectedCurrency == null && list.isNotEmpty) {
+        _selectedCurrency = list.first;
+      }
+    });
+  }
+
+  // Open a dialog to add a new category
+  Future<void> _addCategoryFromMenu() async {
+    final text = await _openEditCategoryDialog();
+    if (text != null && text.trim().isNotEmpty) {
+      await AppDatabase.instance.insertCategory(text.trim());
+      await _loadCategories();
+    }
+  }
+
+// Open a dialog to manage categories
+  Future<void> _showManageCategoriesDialog() async {
+    if (_categories.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No categories to manage.')),
+      );
+      return;
+    }
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Manage Categories'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: _categories.length,
+            itemBuilder: (context, index) {
+              final cat = _categories[index];
+              return ListTile(
+                title: Text(cat),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Colors.blue),
+                      onPressed: () async {
+                        final text = await _openEditCategoryDialog(initial: cat);
+                        if (text != null && text.trim().isNotEmpty) {
+                          await AppDatabase.instance.updateCategoryByName(cat, text.trim());
+                          await _loadCategories();
+                          if (mounted) setState(() {});
+                        }
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('Delete category?'),
+                            content: Text("Delete '$cat'?"),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+                              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Delete", style: TextStyle(color: Colors.red))),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          await AppDatabase.instance.deleteCategoryByName(cat);
+                          await _loadCategories();
+                          if (mounted) setState(() {});
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+// Dialog for add/edit category
+  Future<String?> _openEditCategoryDialog({String? initial}) async {
+    final controller = TextEditingController(text: initial ?? '');
+    return showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(initial == null ? 'Add Category' : 'Edit Category'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Category name'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _loadCategories() async {
     final cats = await AppDatabase.instance.getCategories();
     setState(() {
@@ -48,12 +159,109 @@ class _InputDataPageState extends State<InputDataPage> {
     });
   }
 
+  Future<void> _addCurrencyFromMenu() async {
+    final text = await _openEditCurrencyDialog();
+    if (text != null && text.trim().isNotEmpty) {
+      await AppDatabase.instance.insertCurrency(text.trim().toUpperCase());
+      await _loadCurrencies();
+    }
+  }
+
+  Future<void> _showManageCurrenciesDialog() async {
+    if (_currencies.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No currencies to manage.')),
+      );
+      return;
+    }
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Manage Currencies'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: _currencies.length,
+            itemBuilder: (context, index) {
+              final cur = _currencies[index];
+              return ListTile(
+                title: Text(cur),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Colors.blue),
+                      onPressed: () async {
+                        final text = await _openEditCurrencyDialog(initial: cur);
+                        if (text != null && text.trim().isNotEmpty) {
+                          await AppDatabase.instance.updateCurrencyByCode(
+                            cur,
+                            text.trim().toUpperCase(),
+                          );
+                          await _loadCurrencies();
+                        }
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('Delete currency?'),
+                            content: Text("Delete '$cur'?"),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+                              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Delete", style: TextStyle(color: Colors.red))),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          await AppDatabase.instance.deleteCurrencyByCode(cur);
+                          await _loadCurrencies();
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _openEditCurrencyDialog({String? initial}) async {
+    final controller = TextEditingController(text: initial ?? '');
+    return showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(initial == null ? 'Add Currency' : 'Edit Currency'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Currency code (e.g., EUR)'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // FIXED regex
   void _validateForm() {
     final amountText = _amountController.text.replaceAll(RegExp(r'[,\s]'), '');
     final categoryText = _categoryController.text.trim();
 
-    final currencyValid = _currency != null;
+    final currencyValid = _selectedCurrency != null;
 
     bool amountValid = false;
     if (amountText.isNotEmpty) {
@@ -91,7 +299,7 @@ class _InputDataPageState extends State<InputDataPage> {
     setState(() => _isSaving = true);
 
     final item = FinanceItemModel(
-      currency: _currency!,
+      currency: _selectedCurrency!,
       amount: parsedAmount,
       flow: _flow!,
       category: categoryText,
@@ -130,37 +338,36 @@ class _InputDataPageState extends State<InputDataPage> {
           PopupMenuButton<String>(
             onSelected: (value) async {
               switch (value) {
-                case 'categories':
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const CategoriesPage()),
-                  );
-                  _loadCategories(); // reload categories after returning
+                case 'add_category':
+                  await _addCategoryFromMenu();
                   break;
-
-                case 'currencies':
-                // Replace RatesPage with your actual rates page
-                //   await Navigator.of(context).push(
-                //     MaterialPageRoute(builder: (_) => const RatesPage()),
-                //   );
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Page not implemented yet')),
-                  );
+                case 'manage_categories':
+                  await _showManageCategoriesDialog();
+                  break;
+                case 'add_currency':
+                  await _addCurrencyFromMenu();
+                  break;
+                case 'manage_currencies':
+                  await _showManageCurrenciesDialog();
                   break;
               }
             },
             itemBuilder: (context) => [
               const PopupMenuItem(
-                value: 'categories',
-                child: Text('Manage Categories'),
+                value: 'add_category',
+                child: Text('Add Category'),
               ),
               const PopupMenuItem(
-                value: 'currencies',
-                child: Text('Manage Currencies'),
+                value: 'manage_categories',
+                child: Text('Manage Categories'),
               ),
+              PopupMenuItem(value: 'add_currency', child: Text('Add Currency')),
+              PopupMenuItem(value: 'manage_currencies', child: Text('Manage Currencies')),
             ],
           ),
         ],
       ),
+
       body: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Form(
@@ -178,20 +385,29 @@ class _InputDataPageState extends State<InputDataPage> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text('Currency', style: TextStyle(fontSize: 20, color: onPrimary)),
+                        child: Text(
+                          'Currency',
+                          style: TextStyle(fontSize: 20, color: onPrimary),
+                        ),
                       ),
                       DropdownButton<String>(
-                        value: _currency,
-                        hint: Text('Select', style: TextStyle(color: onPrimary, fontSize: 20)),
+                        value: _selectedCurrency,
+                        hint: Text(
+                          'Select',
+                          style: TextStyle(color: onPrimary, fontSize: 20),
+                        ),
                         dropdownColor: primaryColor,
                         underline: const SizedBox(),
                         style: TextStyle(fontSize: 20, color: onPrimary),
                         onChanged: (v) {
-                          setState(() => _currency = v);
+                          setState(() => _selectedCurrency = v);
                           _validateForm();
                         },
-                        items: Currencies.all
-                            .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                        items: _currencies
+                            .map((code) => DropdownMenuItem(
+                          value: code,
+                          child: Text(code),
+                        ))
                             .toList(),
                       ),
                     ],
