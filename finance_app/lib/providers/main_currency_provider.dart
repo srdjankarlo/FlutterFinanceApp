@@ -5,44 +5,47 @@ import '../database/app_database.dart';
 class MainCurrencyProvider extends ChangeNotifier {
   static const _prefKey = 'main_currency';
 
-  String _currency = 'EUR';
+  late String _currency;
   String get currency => _currency;
 
-  MainCurrencyProvider() {
-    _loadCurrency();
-  }
+  MainCurrencyProvider._(this._currency);
 
-  Future<void> _loadCurrency() async {
+  /// Creates a fully-initialized provider.
+  static Future<MainCurrencyProvider> create() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString(_prefKey);
 
-    final list = await AppDatabase.instance.getCurrencies();
+    // Load available currencies from DB
+    final currencies = await AppDatabase.instance.getCurrencies();
 
-    // If saved value exists AND exists in DB, use it
-    if (saved != null && list.contains(saved)) {
-      _currency = saved;
-      notifyListeners();
-      return;
+    // Decide initial currency
+    String initial = 'EUR';
+
+    if (currencies.isNotEmpty) {
+      if (saved != null && currencies.contains(saved)) {
+        initial = saved;
+      } else {
+        // If nothing saved, default to the first available
+        initial = currencies.first;
+        await prefs.setString(_prefKey, initial);
+      }
     }
 
-    // If saved is invalid OR missing → try default from DB
-    if (list.isNotEmpty) {
-      _currency = list.first;
-      prefs.setString(_prefKey, _currency);
-      notifyListeners();
-    }
+    return MainCurrencyProvider._(initial);
   }
 
+  /// Updates and persists main currency.
   Future<void> setCurrency(String code) async {
-    final list = await AppDatabase.instance.getCurrencies();
-    if (!list.contains(code)) return;
+    // Validate input
+    final currencies = await AppDatabase.instance.getCurrencies();
+    if (!currencies.contains(code)) return;
 
-    if (_currency != code) {
-      _currency = code;
-      notifyListeners();
+    if (code == _currency) return; // No change
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_prefKey, code);
-    }
+    _currency = code;
+    notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefKey, code);
   }
 }

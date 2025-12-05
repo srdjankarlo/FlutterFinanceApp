@@ -4,13 +4,25 @@ import 'pages/starting_page.dart';
 import 'theme/color_schemes.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'database/app_database.dart';
+import 'services/currency_conversion_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 1) Ensure DB is ready
+  await AppDatabase.instance.init();
+
+  // 2) Ensure conversion service has loaded cached rates
+  await CurrencyConversionService.instance.init();
+
+  // 3) Load saved theme selection
   final prefs = await SharedPreferences.getInstance();
   final savedSchemeName = prefs.getString('selectedColorScheme') ?? 'Cold';
   final savedScheme = appColorSchemes[savedSchemeName]!;
+
+  // 4) Create a ready MainCurrencyProvider (reads shared prefs + DB)
+  final mainCurrencyProvider = await MainCurrencyProvider.create();
 
   runApp(
     MultiProvider(
@@ -21,7 +33,9 @@ void main() async {
             initialScheme: savedScheme,
           ),
         ),
-        ChangeNotifierProvider(create: (_) => MainCurrencyProvider()),
+        ChangeNotifierProvider<MainCurrencyProvider>.value(
+          value: mainCurrencyProvider,
+        ),
       ],
       child: const FinanceApp(),
     ),

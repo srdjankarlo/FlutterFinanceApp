@@ -16,35 +16,56 @@ class _RatesPageState extends State<RatesPage> {
   final Map<String, TextEditingController> controllers = {};
   Map<String, ExchangeRateModel?> currentRates = {};
   String mainCurrency = "";
+  bool loading = true;
+  bool firstRun = true;
 
   @override
-  void initState() {
-    super.initState();
-    _load();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Run only once when dependencies are ready
+    if (firstRun) {
+      firstRun = false;
+      _safeLoad();
+    }
   }
 
-  Future<void> _load() async {
-    mainCurrency = Provider.of<MainCurrencyProvider>(context, listen: false).currency;
+  Future<void> _safeLoad() async {
+    final provider = Provider.of<MainCurrencyProvider>(context, listen: false);
+
+    // Wait until provider finishes loading
+    mainCurrency = provider.currency;
+
+    await _loadRates();
+  }
+
+  Future<void> _loadRates() async {
+    setState(() => loading = true);
 
     await CurrencyConversionService.instance.reloadRates();
 
-    final rates = <String, ExchangeRateModel?>{};
+    final tempRates = <String, ExchangeRateModel?>{};
     final currencyList = await AppDatabase.instance.getCurrencies();
+
     for (var c in currencyList) {
       if (c == mainCurrency) continue;
-      rates[c] = await CurrencyConversionService.instance.getRateModel(mainCurrency, c);
+      tempRates[c] =
+      await CurrencyConversionService.instance.getRateModel(mainCurrency, c);
     }
 
     setState(() {
-      currentRates = rates;
-      controllers.clear();
+      currentRates = tempRates;
 
+      controllers.clear();
       for (var c in currencyList) {
         if (c == mainCurrency) continue;
+
         controllers[c] = TextEditingController(
           text: currentRates[c]?.rate.toString() ?? '',
         );
       }
+
+      loading = false;
     });
   }
 
@@ -62,7 +83,7 @@ class _RatesPageState extends State<RatesPage> {
     );
 
     if (ok) {
-      await _load();
+      await _loadRates();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Saved')),
       );
@@ -71,11 +92,17 @@ class _RatesPageState extends State<RatesPage> {
 
   Future<void> _deleteRate(String target) async {
     await CurrencyConversionService.instance.deletePair(mainCurrency, target);
-    await _load();
+    await _loadRates();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final items = currentRates.keys.toList();
 
     return Scaffold(
@@ -111,10 +138,16 @@ class _RatesPageState extends State<RatesPage> {
                             Expanded(
                               child: TextField(
                                 controller: controllers[curr],
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                keyboardType:
+                                const TextInputType.numberWithOptions(
+                                    decimal: true),
                               ),
                             ),
-                            Text(' $curr', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),),
+                            Text(
+                              ' $curr',
+                              style: const TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.bold),
+                            ),
                             IconButton(
                               icon: const Icon(Icons.save),
                               onPressed: () => _saveRate(curr),

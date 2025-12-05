@@ -23,6 +23,9 @@ class CurrencyConversionService {
     _loaded = true;
   }
 
+  /// Public initializer to call from main()
+  Future<void> init() => _load();
+
   Future<void> reloadRates() async {
     _loaded = false;
     await _load();

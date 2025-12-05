@@ -9,6 +9,11 @@ class AppDatabase {
 
   static Database? _db;
 
+  /// Ensure DB is opened (call from main())
+  Future<void> init() async {
+    await db;
+  }
+
   Future<Database> get db async {
     if (_db != null) return _db!;
     _db = await _initDB();
@@ -61,7 +66,6 @@ class AppDatabase {
     await db.insert('currencies', {'code': 'EUR'});
     await db.insert('currencies', {'code': 'USD'});
     await db.insert('currencies', {'code': 'GBP'});
-
   }
 
   // -------------------------------------------------------------- Finance Item
@@ -184,29 +188,18 @@ class AppDatabase {
   Future<int> deleteCurrency(int id) async {
     final database = await db;
     return await database.delete(
-      'currencies',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+        'currencies',
+        where: 'id = ?',
+        whereArgs: [id]);
   }
 
   Future<void> updateCurrencyByCode(String oldCode, String newCode) async {
     final dbClient = await db;
-    await dbClient.update(
-      'currencies',
-      {'code': newCode},
-      where: 'code = ?',
-      whereArgs: [oldCode],
-    );
+    await dbClient.update('currencies', {'code': newCode}, where: 'code = ?', whereArgs: [oldCode]);
   }
 
   Future<void> deleteCurrencyByCode(String code) async {
     final dbClient = await db;
-    await dbClient.delete(
-      'currencies',
-      where: 'code = ?',
-      whereArgs: [code],
-    );
+    await dbClient.delete('currencies', where: 'code = ?', whereArgs: [code]);
   }
-
 }
