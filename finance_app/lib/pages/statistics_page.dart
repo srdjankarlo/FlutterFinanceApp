@@ -123,10 +123,17 @@ class _StatisticsPageState extends State<StatisticsPage> {
     if (balance <= 0 || balance < saveAmount) return null;
 
     final now = DateTime.now();
-    final daysInMonth = DateUtils.getDaysInMonth(now.year, now.month);
+
+    // Days left including today
+    final daysLeft = DateTime(now.year, now.month + 1, 1)
+        .difference(DateTime(now.year, now.month, now.day))
+        .inDays;
+
+    if (daysLeft <= 0) return null;
 
     final remaining = balance - saveAmount;
-    return remaining / daysInMonth;
+    return remaining / daysLeft;
+
   }
 
   Widget _buildHorizontalBarChart(Map<String, double> data, String title) {
